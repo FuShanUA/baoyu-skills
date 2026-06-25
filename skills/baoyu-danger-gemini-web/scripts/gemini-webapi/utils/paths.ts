@@ -35,7 +35,7 @@ function getWslWindowsHome(): string | null {
   if (_wslHome !== undefined) return _wslHome;
   if (!process.env.WSL_DISTRO_NAME) { _wslHome = null; return null; }
   try {
-    const raw = execSync('cmd.exe /C "echo %USERPROFILE%"', { encoding: 'utf-8', timeout: 5000 }).trim().replace(/\r/g, '');
+    const raw = execSync('cmd.exe /C "echo /Users/shanfu"', { encoding: 'utf-8', timeout: 5000 }).trim().replace(/\r/g, '');
     _wslHome = execSync(`wslpath -u "${raw}"`, { encoding: 'utf-8', timeout: 5000 }).trim() || null;
   } catch { _wslHome = null; }
   return _wslHome;
@@ -57,4 +57,3 @@ export function resolveGeminiWebSessionPath(name: string): string {
   const sanitized = name.replace(/[^a-zA-Z0-9_-]/g, '_');
   return path.join(resolveGeminiWebSessionsDir(), `${sanitized}.json`);
 }
-

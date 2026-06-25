@@ -38,4 +38,3 @@ export function parse_file_name(file: string): string {
 
 export const uploadFile = upload_file;
 export const parseFileName = parse_file_name;
-

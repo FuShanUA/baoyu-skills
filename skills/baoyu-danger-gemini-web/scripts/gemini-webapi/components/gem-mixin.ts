@@ -176,4 +176,3 @@ export abstract class GemMixin {
     }, 2);
   }
 }
-

@@ -109,4 +109,3 @@ export class Model {
     return new Model(model_dict.model_name, header, false);
   }
 }
-

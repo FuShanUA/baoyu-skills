@@ -1,5 +1,6 @@
 export type Provider =
   | "google"
+  | "vertex"
   | "openai"
   | "openrouter"
   | "dashscope"

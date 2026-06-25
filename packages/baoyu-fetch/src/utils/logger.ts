@@ -27,4 +27,3 @@ export function createLogger(debugEnabled = false): Logger {
     },
   };
 }
-

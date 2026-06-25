@@ -236,6 +236,7 @@ export function parseArgs(argv: string[]): CliArgs {
       const v = argv[++i];
       if (
         v !== "google" &&
+        v !== "vertex" &&
         v !== "openai" &&
         v !== "openrouter" &&
         v !== "dashscope" &&
@@ -656,6 +657,7 @@ export function detectProvider(args: CliArgs): Provider {
 
   const available = [
     hasGoogle && "google",
+    hasGoogle && "vertex",
     hasOpenai && "openai",
     hasAzure && "azure",
     hasOpenrouter && "openrouter",
@@ -707,7 +709,7 @@ export function isRetryableGenerationError(error: unknown): boolean {
 }
 
 async function loadProviderModule(provider: Provider): Promise<ProviderModule> {
-  if (provider === "google") return (await import("./providers/google")) as ProviderModule;
+  if (provider === "google" || provider === "vertex") return (await import("./providers/google")) as ProviderModule;
   if (provider === "dashscope") return (await import("./providers/dashscope")) as ProviderModule;
   if (provider === "minimax") return (await import("./providers/minimax")) as ProviderModule;
   if (provider === "replicate") return (await import("./providers/replicate")) as ProviderModule;

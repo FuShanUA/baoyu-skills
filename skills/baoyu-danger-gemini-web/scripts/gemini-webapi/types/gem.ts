@@ -72,4 +72,3 @@ export class GemJar implements Iterable<Gem> {
     return new GemJar(out);
   }
 }
-

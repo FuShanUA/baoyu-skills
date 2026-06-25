@@ -62,6 +62,7 @@ const DEFAULT_PROVIDER_RATE_LIMITS: Record<Provider, ProviderRateLimit> = {
   jimeng: { concurrency: 3, startIntervalMs: 1100 },
   seedream: { concurrency: 3, startIntervalMs: 1100 },
   azure: { concurrency: 3, startIntervalMs: 1100 },
+  vertex: { concurrency: 3, startIntervalMs: 1100 },
 };
 
 function printUsage(): void {
@@ -243,7 +244,8 @@ export function parseArgs(argv: string[]): CliArgs {
         v !== "replicate" &&
         v !== "jimeng" &&
         v !== "seedream" &&
-        v !== "azure"
+        v !== "azure" &&
+        v !== "vertex"
       ) {
         throw new Error(`Invalid provider: ${v}`);
       }
@@ -400,6 +402,7 @@ export function parseSimpleYaml(yaml: string): Partial<ExtendConfig> {
           jimeng: null,
           seedream: null,
           azure: null,
+          vertex: null,
         };
         currentKey = "default_model";
         currentProvider = null;
@@ -445,7 +448,8 @@ export function parseSimpleYaml(yaml: string): Partial<ExtendConfig> {
           key === "replicate" ||
           key === "jimeng" ||
           key === "seedream" ||
-          key === "azure"
+          key === "azure" ||
+          key === "vertex"
         )
       ) {
         const cleaned = value.replace(/['"]/g, "");
@@ -575,9 +579,10 @@ export function getConfiguredProviderRateLimits(
     jimeng: { ...DEFAULT_PROVIDER_RATE_LIMITS.jimeng },
     seedream: { ...DEFAULT_PROVIDER_RATE_LIMITS.seedream },
     azure: { ...DEFAULT_PROVIDER_RATE_LIMITS.azure },
+    vertex: { ...DEFAULT_PROVIDER_RATE_LIMITS.vertex },
   };
 
-  for (const provider of ["replicate", "google", "openai", "openrouter", "dashscope", "minimax", "jimeng", "seedream", "azure"] as Provider[]) {
+  for (const provider of ["replicate", "google", "openai", "openrouter", "dashscope", "minimax", "jimeng", "seedream", "azure", "vertex"] as Provider[]) {
     const envPrefix = `BAOYU_IMAGE_GEN_${provider.toUpperCase()}`;
     const extendLimit = extendConfig.batch?.provider_limits?.[provider];
     configured[provider] = {
@@ -642,10 +647,11 @@ export function detectProvider(args: CliArgs): Provider {
     args.provider !== "openrouter" &&
     args.provider !== "replicate" &&
     args.provider !== "seedream" &&
-    args.provider !== "minimax"
+    args.provider !== "minimax" &&
+    args.provider !== "vertex"
   ) {
     throw new Error(
-      "Reference images require a ref-capable provider. Use --provider google (Gemini multimodal), --provider openai (GPT Image edits), --provider azure (Azure OpenAI), --provider openrouter (OpenRouter multimodal), --provider replicate, --provider seedream for supported Seedream models, or --provider minimax for MiniMax subject-reference workflows."
+      "Reference images require a ref-capable provider. Use --provider google (Gemini multimodal), --provider openai (GPT Image edits), --provider azure (Azure OpenAI), --provider openrouter (OpenRouter multimodal), --provider replicate, --provider seedream for supported Seedream models, or --provider minimax for MiniMax subject-reference workflows, or --provider vertex (Vertex AI multimodal)."
     );
   }
 
@@ -660,6 +666,7 @@ export function detectProvider(args: CliArgs): Provider {
   const hasReplicate = !!process.env.REPLICATE_API_TOKEN;
   const hasJimeng = !!(process.env.JIMENG_ACCESS_KEY_ID && process.env.JIMENG_SECRET_ACCESS_KEY);
   const hasSeedream = !!process.env.ARK_API_KEY;
+  const hasVertex = !!(process.env.VERTEX_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT);
   const modelProvider = inferProviderFromModel(args.model);
 
   if (modelProvider === "seedream") {
@@ -678,6 +685,7 @@ export function detectProvider(args: CliArgs): Provider {
 
   if (args.referenceImages.length > 0) {
     if (hasGoogle) return "google";
+    if (hasVertex) return "vertex";
     if (hasOpenai) return "openai";
     if (hasAzure) return "azure";
     if (hasOpenrouter) return "openrouter";
@@ -685,7 +693,7 @@ export function detectProvider(args: CliArgs): Provider {
     if (hasSeedream) return "seedream";
     if (hasMinimax) return "minimax";
     throw new Error(
-      "Reference images require Google, OpenAI, Azure, OpenRouter, Replicate, supported Seedream models, or MiniMax. Set GOOGLE_API_KEY/GEMINI_API_KEY, OPENAI_API_KEY, AZURE_OPENAI_API_KEY+AZURE_OPENAI_BASE_URL, OPENROUTER_API_KEY, REPLICATE_API_TOKEN, ARK_API_KEY, or MINIMAX_API_KEY, or remove --ref."
+      "Reference images require Google, Vertex, OpenAI, Azure, OpenRouter, Replicate, supported Seedream models, or MiniMax. Set GOOGLE_API_KEY/GEMINI_API_KEY, VERTEX_PROJECT_ID, OPENAI_API_KEY, AZURE_OPENAI_API_KEY+AZURE_OPENAI_BASE_URL, OPENROUTER_API_KEY, REPLICATE_API_TOKEN, ARK_API_KEY, or MINIMAX_API_KEY, or remove --ref."
     );
   }
 
@@ -699,6 +707,7 @@ export function detectProvider(args: CliArgs): Provider {
     hasReplicate && "replicate",
     hasJimeng && "jimeng",
     hasSeedream && "seedream",
+    hasVertex && "vertex",
   ].filter(Boolean) as Provider[];
 
   if (available.length === 1) return available[0]!;
@@ -750,6 +759,7 @@ async function loadProviderModule(provider: Provider): Promise<ProviderModule> {
   if (provider === "jimeng") return (await import("./providers/jimeng")) as ProviderModule;
   if (provider === "seedream") return (await import("./providers/seedream")) as ProviderModule;
   if (provider === "azure") return (await import("./providers/azure")) as ProviderModule;
+  if (provider === "vertex") return (await import("./providers/vertex")) as ProviderModule;
   return (await import("./providers/openai")) as ProviderModule;
 }
 
@@ -780,6 +790,7 @@ function getModelForProvider(
     if (provider === "jimeng" && extendConfig.default_model.jimeng) return extendConfig.default_model.jimeng;
     if (provider === "seedream" && extendConfig.default_model.seedream) return extendConfig.default_model.seedream;
     if (provider === "azure" && extendConfig.default_model.azure) return extendConfig.default_model.azure;
+    if (provider === "vertex" && extendConfig.default_model.vertex) return extendConfig.default_model.vertex;
   }
   return providerModule.getDefaultModel();
 }

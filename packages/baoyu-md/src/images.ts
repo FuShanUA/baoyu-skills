@@ -24,7 +24,8 @@ export function replaceMarkdownImagesWithPlaceholders(
   const images: ImagePlaceholder[] = [];
   let imageCounter = 0;
 
-  const rewritten = markdown.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_match, alt, src) => {
+  const rewritten = markdown.replace(/!\[([^\]]*)\]\((.*?)\)/g, (_match, alt, srcPart) => {
+    const src = srcPart.trim().split(/\s+/)[0] || "";
     const placeholder = `${placeholderPrefix}${++imageCounter}`;
     images.push({
       alt,

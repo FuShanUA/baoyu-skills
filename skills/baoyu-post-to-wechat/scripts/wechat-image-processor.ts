@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -96,7 +97,27 @@ async function ensureWebpDecoder(): Promise<void> {
     webpDecoderReady = (async () => {
       const __filename = fileURLToPath(import.meta.url);
       const __dirname = path.dirname(__filename);
-      const wasmPath = path.resolve(__dirname, "node_modules/@jsquash/webp/codec/dec/webp_dec.wasm");
+      
+      const wasmRelativePath = "node_modules/@jsquash/webp/codec/dec/webp_dec.wasm";
+      let wasmPath = path.resolve(__dirname, wasmRelativePath);
+      
+      // If not found locally, search up the directory tree
+      if (!existsSync(wasmPath)) {
+        let currentDir = __dirname;
+        while (currentDir !== path.parse(currentDir).root) {
+          const candidate = path.resolve(currentDir, wasmRelativePath);
+          if (existsSync(candidate)) {
+            wasmPath = candidate;
+            break;
+          }
+          currentDir = path.dirname(currentDir);
+        }
+      }
+
+      if (!existsSync(wasmPath)) {
+        throw new Error(`WebP decoder WASM not found. Searched up from ${__dirname}`);
+      }
+
       const wasmModule = await WebAssembly.compile(await fs.readFile(wasmPath));
       await initWebpDecode(wasmModule, {});
     })();
@@ -110,13 +131,18 @@ async function loadImageForProcessing(asset: WechatUploadAsset): Promise<JimpIma
   const normalizedMimeType = normalizeMimeType(asset.contentType);
 
   if (fileExt === ".webp" || normalizedMimeType === "image/webp") {
-    await ensureWebpDecoder();
-    const decoded = await decodeWebp(asset.buffer);
-    return new Jimp({
-      data: Buffer.from(decoded.data.buffer, decoded.data.byteOffset, decoded.data.byteLength),
-      width: decoded.width,
-      height: decoded.height,
-    });
+    try {
+      return await Jimp.read(asset.buffer);
+    } catch (jimpErr) {
+      console.error(`[wechat-image-processor] Jimp.read failed for WebP, falling back to @jsquash: ${jimpErr instanceof Error ? jimpErr.message : String(jimpErr)}`);
+      await ensureWebpDecoder();
+      const decoded = await decodeWebp(asset.buffer);
+      return new Jimp({
+        data: Buffer.from(decoded.data.buffer, decoded.data.byteOffset, decoded.data.byteLength),
+        width: decoded.width,
+        height: decoded.height,
+      });
+    }
   }
 
   if (fileExt === ".svg" || fileExt === ".ico") {

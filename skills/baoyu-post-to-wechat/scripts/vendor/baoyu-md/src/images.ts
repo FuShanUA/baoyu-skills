@@ -24,11 +24,19 @@ export function replaceMarkdownImagesWithPlaceholders(
   const images: ImagePlaceholder[] = [];
   let imageCounter = 0;
 
-  const rewritten = markdown.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_match, alt, src) => {
+  const rewritten = markdown.replace(/!\[([^\]]*)\]\(([^)]+?)\)/g, (match, alt, src) => {
+    // Basic protection against nested/malformed captures
+    if (src.includes("![") || src.includes("](")) {
+      return match;
+    }
+    
+    // Trim potential surrounding quotes or extra whitespace often found in malformed markdown
+    const cleanSrc = src.trim().split(/\s+/)[0]!;
+
     const placeholder = `${placeholderPrefix}${++imageCounter}`;
     images.push({
       alt,
-      originalPath: src,
+      originalPath: cleanSrc,
       placeholder,
     });
     return placeholder;

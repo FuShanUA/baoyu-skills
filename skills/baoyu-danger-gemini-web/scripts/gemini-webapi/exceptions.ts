@@ -53,4 +53,3 @@ export class TemporarilyBlocked extends GeminiError {
     this.name = 'TemporarilyBlocked';
   }
 }
-

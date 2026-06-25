@@ -243,7 +243,7 @@ async function copyHtmlWindows(htmlFilePath: string): Promise<void> {
   const escaped = htmlFilePath.replace(/'/g, "''");
   const ps = [
     'Add-Type -AssemblyName System.Windows.Forms',
-    `$html = Get-Content -Raw -LiteralPath '${escaped}'`,
+    `$html = Get-Content -Raw -Encoding utf8 -LiteralPath '${escaped}'`,
     '[System.Windows.Forms.Clipboard]::SetText($html, [System.Windows.Forms.TextDataFormat]::Html)',
   ].join('; ');
   await runCommand('powershell.exe', ['-NoProfile', '-Sta', '-Command', ps]);
@@ -377,4 +377,3 @@ await main().catch((err) => {
   console.error(`Error: ${message}`);
   process.exit(1);
 });
-

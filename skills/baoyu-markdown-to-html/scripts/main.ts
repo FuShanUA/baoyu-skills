@@ -116,7 +116,18 @@ export async function convertMarkdown(
 
   let finalContent = fs.readFileSync(finalHtmlPath, "utf-8");
   for (const image of contentImages) {
-    const imgTag = `<img src="${image.originalPath}" data-local-path="${image.localPath}" style="display: block; width: 100%; margin: 1.5em auto;">`;
+    // Determine the best display path: 
+    // 1. If it's a relative path, keep it as is (most stable for local viewing)
+    // 2. If it's an absolute file path, ensure it's properly URL-encoded to handle spaces
+    let displayPath = image.originalPath;
+    if (displayPath.startsWith("/") || displayPath.includes(":\\")) {
+        // It's an absolute path, encode it for HTML src attribute
+        displayPath = displayPath.startsWith("file://") ? displayPath : `file://${displayPath.replace(/\\/g, "/")}`;
+        // Manually handle spaces if encodeURI isn't enough, but encodeURI is usually standard
+        displayPath = encodeURI(displayPath);
+    }
+    
+    const imgTag = `<img src="${displayPath}" data-local-path="${image.localPath}" style="display: block; width: 100%; margin: 1.5em auto;">`;
     finalContent = finalContent.replace(image.placeholder, imgTag);
   }
   fs.writeFileSync(finalHtmlPath, finalContent, "utf-8");

@@ -6,4 +6,3 @@ export function extractStatusId(url: URL): string | undefined {
   const match = url.pathname.match(/\/(?:status|article)\/(\d+)/);
   return match?.[1];
 }
-

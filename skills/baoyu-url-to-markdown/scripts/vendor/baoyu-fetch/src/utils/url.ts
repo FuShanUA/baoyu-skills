@@ -9,4 +9,3 @@ export function normalizeUrl(input: string): URL {
 export function sanitizeFilename(input: string): string {
   return input.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "document";
 }
-

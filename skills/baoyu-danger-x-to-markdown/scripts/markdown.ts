@@ -203,7 +203,7 @@ function renderMediaLines(
   }
 
   usedUrls.add(asset.url);
-  return [`![${altText}](${asset.url})`];
+  return [`![${altText || "Image"}](${asset.url})`];
 }
 
 function buildMediaById(article: ArticleEntity): Map<string, ResolvedMediaAsset> {
@@ -421,6 +421,26 @@ function renderInlineLinks(
   return result;
 }
 
+function resolvePlaceholderMediaLines(
+  text: string,
+  article: ArticleEntity,
+  usedUrls: Set<string>
+): string[] {
+  const lines: string[] = [];
+  const matches = text.matchAll(/XIMGPH_(\d+)/g);
+  for (const match of matches) {
+    const index = parseInt(match[1] ?? "", 10);
+    if (!isNaN(index)) {
+      const entity = article.media_entities?.[index];
+      const asset = resolveMediaAsset(entity?.media_info);
+      if (asset) {
+        lines.push(...renderMediaLines(asset, "", usedUrls));
+      }
+    }
+  }
+  return lines;
+}
+
 function renderContentBlocks(
   blocks: ArticleBlock[],
   entityMap: ArticleContentState["entityMap"] | undefined,
@@ -428,6 +448,7 @@ function renderContentBlocks(
   mediaById: Map<string, ResolvedMediaAsset>,
   usedUrls: Set<string>,
   mediaLinkMap: Map<number, string>,
+  article: ArticleEntity,
   referencedTweets?: Map<string, ReferencedTweetInfo>
 ): string[] {
   const lines: string[] = [];
@@ -625,10 +646,19 @@ function renderContentBlocks(
       }
       default:
         if (/^XIMGPH_\d+$/.test(text.trim())) {
-          pushTrailingMedia(collectMediaLines(block));
+          const placeholderLines = resolvePlaceholderMediaLines(text, article, usedUrls);
+          if (placeholderLines.length > 0) {
+            pushBlock(placeholderLines, "media");
+          } else {
+            pushBlock(collectMediaLines(block), "media");
+          }
           break;
         }
         pushBlock([text], "text");
+        const extraMedia = resolvePlaceholderMediaLines(text, article, usedUrls);
+        if (extraMedia.length > 0) {
+          pushBlock(extraMedia, "media");
+        }
         pushTrailingMedia(collectMediaLines(block));
         break;
     }
@@ -698,6 +728,7 @@ export function formatArticleMarkdown(
       mediaById,
       usedUrls,
       mediaLinkMap,
+      candidate,
       options.referencedTweets
     );
     if (rendered.length > 0) {

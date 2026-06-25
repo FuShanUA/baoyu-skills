@@ -80,4 +80,3 @@ export function extractDocumentFromHtml(input: {
     content: contentHtml ? [{ type: "html", html: contentHtml }] : [],
   };
 }
-

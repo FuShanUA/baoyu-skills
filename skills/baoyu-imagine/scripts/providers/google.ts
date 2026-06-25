@@ -7,6 +7,9 @@ const GOOGLE_MULTIMODAL_MODELS = [
   "gemini-3-pro-image-preview",
   "gemini-3-flash-preview",
   "gemini-3.1-flash-image-preview",
+  "nano-banana-pro",
+  "gemini-3.1-pro-preview",
+  "gemini-3-pro-preview",
 ];
 const GOOGLE_IMAGEN_MODELS = [
   "imagen-3.0-generate-002",
@@ -18,7 +21,14 @@ export function getDefaultModel(): string {
 }
 
 export function normalizeGoogleModelId(model: string): string {
-  return model.startsWith("models/") ? model.slice("models/".length) : model;
+  const modelId = model.startsWith("models/") ? model.slice("models/".length) : model;
+  const aliasMap: Record<string, string> = {
+    "google/nano-banana-pro": "gemini-3-pro-image-preview",
+    "nano-banana-pro": "gemini-3-pro-image-preview",
+    "google/nano-banana-2": "gemini-3-flash-preview",
+    "nano-banana-2": "gemini-3-flash-preview",
+  };
+  return aliasMap[modelId] || modelId;
 }
 
 export function isGoogleMultimodal(model: string): boolean {

@@ -39,4 +39,3 @@ export const logger = {
   error: (...args: unknown[]) => emit('ERROR', args),
   success: (...args: unknown[]) => emit('INFO', args),
 };
-

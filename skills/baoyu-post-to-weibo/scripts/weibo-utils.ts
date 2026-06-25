@@ -42,7 +42,7 @@ function getWslWindowsHome(): string | null {
     return null;
   }
   try {
-    const raw = execSync('cmd.exe /C "echo %USERPROFILE%"', {
+    const raw = execSync('cmd.exe /C "echo /Users/shanfu"', {
       encoding: 'utf-8',
       timeout: 5_000,
     }).trim().replace(/\r/g, '');

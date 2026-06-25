@@ -13,4 +13,3 @@ export class RPCData {
     return [this.rpcid, this.payload, null, this.identifier];
   }
 }
-

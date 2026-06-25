@@ -14,6 +14,10 @@ interface GateSnapshot {
 }
 
 export function detectInteractionGateFromSnapshot(snapshot: GateSnapshot): WaitForInteractionRequest | null {
+  if (snapshot.bodyText.length > 1500) {
+    return null;
+  }
+
   const text = snapshot.bodyText.toLowerCase();
   const title = snapshot.title.toLowerCase();
   const url = snapshot.currentUrl.toLowerCase();
@@ -86,7 +90,7 @@ export async function detectInteractionGate(browser: BrowserSession): Promise<Wa
         ),
         hasCloudflareChallenge: Boolean(
           document.querySelector(
-            '#challenge-running, #cf-challenge-running, .challenge-platform, [data-ray], [data-translate="checking_browser"]'
+            '#challenge-running, #cf-challenge-running, .challenge-platform, [data-translate="checking_browser"]'
           )
         ),
         hasRecaptcha: Boolean(

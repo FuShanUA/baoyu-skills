@@ -31,9 +31,9 @@ interface ParsedResult {
 
 export async function convertMarkdown(
   markdownPath: string,
-  options?: { title?: string; theme?: string; color?: string; citeStatus?: boolean },
+  options?: { title?: string; theme?: string; color?: string; citeStatus?: boolean; baseDir?: string },
 ): Promise<ParsedResult> {
-  const baseDir = path.dirname(markdownPath);
+  const baseDir = options?.baseDir || path.dirname(markdownPath);
   const content = fs.readFileSync(markdownPath, "utf-8");
   const citeStatus = options?.citeStatus ?? true;
 
@@ -63,7 +63,7 @@ export async function convertMarkdown(
   const htmlPath = path.join(tempDir, "temp-article.html");
 
   console.error(
-    `[md-to-wechat] Rendering markdown with theme: ${options?.theme ?? "default"}${options?.color ? `, color: ${options.color}` : ""}, citeStatus: ${citeStatus}`,
+    `[md-to-wechat] Rendering markdown with theme: ${options?.theme ?? "default"}${options?.color ? `, color: ${options.color}` : ""}, citeStatus: ${citeStatus}, baseDir: ${baseDir}`,
   );
 
   const { html } = await renderMarkdownDocument(rewrittenMarkdown, {
@@ -97,6 +97,7 @@ Options:
   --theme <name>      Theme name (default, grace, simple, modern)
   --color <name|hex>  Primary color (blue, green, vermilion, etc. or hex)
   --no-cite           Disable bottom citations for ordinary external links
+  --basedir <path>    Base directory for resolving images
   --help              Show this help
 
 Output JSON format:
@@ -117,6 +118,7 @@ Example:
   npx -y bun md-to-wechat.ts article.md --theme grace
   npx -y bun md-to-wechat.ts article.md --theme modern --color blue
   npx -y bun md-to-wechat.ts article.md --no-cite
+  npx -y bun md-to-wechat.ts article.md --basedir /path/to/assets
 `);
   process.exit(0);
 }
@@ -131,6 +133,7 @@ async function main(): Promise<void> {
   let title: string | undefined;
   let theme: string | undefined;
   let color: string | undefined;
+  let baseDir: string | undefined;
   let citeStatus = true;
 
   for (let i = 0; i < args.length; i++) {
@@ -145,6 +148,8 @@ async function main(): Promise<void> {
       citeStatus = true;
     } else if (arg === "--no-cite") {
       citeStatus = false;
+    } else if (arg === "--basedir" && args[i + 1]) {
+      baseDir = args[++i];
     } else if (!arg.startsWith("-")) {
       markdownPath = arg;
     }
@@ -160,11 +165,13 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const result = await convertMarkdown(markdownPath, { title, theme, color, citeStatus });
+  const result = await convertMarkdown(markdownPath, { title, theme, color, citeStatus, baseDir });
   console.log(JSON.stringify(result, null, 2));
 }
 
-await main().catch((error) => {
-  console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-  process.exit(1);
-});
+if (import.meta.main) {
+  await main().catch((error) => {
+    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  });
+}

@@ -108,12 +108,32 @@ async function loadUploadAsset(
     fileExt = path.extname(filename).toLowerCase();
     contentType = response.headers.get("content-type") || "image/jpeg";
   } else {
-    const resolvedPath = path.isAbsolute(imagePath)
-      ? imagePath
-      : path.resolve(baseDir || process.cwd(), imagePath);
+    // Basic cleanup of imagePath
+    let cleanedImagePath = imagePath.trim();
+    if ((cleanedImagePath.startsWith('"') && cleanedImagePath.endsWith('"')) ||
+        (cleanedImagePath.startsWith("'") && cleanedImagePath.endsWith("'"))) {
+      cleanedImagePath = cleanedImagePath.slice(1, -1);
+    }
+
+    let resolvedPath = cleanedImagePath;
+    
+    // On macOS/Linux, paths starting with / are always absolute — use directly.
+    // On Windows, paths starting with / may be web-root-relative, try baseDir fallback.
+    if (cleanedImagePath.startsWith("/") || cleanedImagePath.startsWith("\\")) {
+      if (process.platform === "win32" && !fs.existsSync(cleanedImagePath)) {
+        const relativePath = cleanedImagePath.substring(1);
+        resolvedPath = path.resolve(baseDir || process.cwd(), relativePath);
+      } else {
+        resolvedPath = cleanedImagePath;
+      }
+    } else {
+      resolvedPath = path.isAbsolute(cleanedImagePath)
+        ? cleanedImagePath
+        : path.resolve(baseDir || process.cwd(), cleanedImagePath);
+    }
 
     if (!fs.existsSync(resolvedPath)) {
-      throw new Error(`Image not found: ${resolvedPath}`);
+      throw new Error(`Image not found: ${resolvedPath}\n(Original: ${imagePath})\n(BaseDir: ${baseDir})\nHint: Check if the file is correctly generated and the path is valid.`);
     }
     const stats = fs.statSync(resolvedPath);
     if (stats.size === 0) {
@@ -156,7 +176,9 @@ async function uploadImage(
   const asset = await loadUploadAsset(imagePath, baseDir);
   let uploadAsset = asset;
 
-  if (uploadType === "body" && needsWechatBodyImageProcessing(asset)) {
+  // Both body and material uploads need conversion for unsupported formats (WebP, BMP, etc.)
+  // WeChat's material/add_material API also rejects WebP (errcode 40113)
+  if (needsWechatBodyImageProcessing(asset)) {
     const prepared = await prepareWechatBodyImageUpload(asset);
     uploadAsset = {
       ...asset,
@@ -167,7 +189,7 @@ async function uploadImage(
       fileSize: prepared.buffer.length,
     };
     const note = prepared.processingNotes.join(", ");
-    console.error(`[wechat-api] Processed ${asset.filename} for body upload: ${note}`);
+    console.error(`[wechat-api] Processed ${asset.filename} for ${uploadType} upload: ${note}`);
   }
 
   const result = await uploadToWechat(
@@ -386,8 +408,26 @@ async function publishToDraft(
   });
 
   const data = await res.json() as PublishResponse;
+  
+  // Debug logging
+  const logFile = path.join(process.cwd(), "wechat_publish_debug.json");
+  console.error(`[wechat-api] Debug log path: ${logFile} (CWD: ${process.cwd()})`);
+  const debugInfo = {
+    timestamp: new Date().toISOString(),
+    cwd: process.cwd(),
+    url,
+    payload: { ...article, content: article.content?.toString().slice(0, 500) + "..." },
+    response: data
+  };
+  try {
+    fs.appendFileSync(logFile, JSON.stringify(debugInfo, null, 2) + "\n---\n", "utf8");
+    console.error(`[wechat-api] Successfully appended to debug log: ${logFile}`);
+  } catch (e) {
+    console.error(`[wechat-api] Failed to write debug log to ${logFile}:`, e);
+  }
+
   if (data.errcode && data.errcode !== 0) {
-    throw new Error(`Publish failed ${data.errcode}: ${data.errmsg}`);
+    throw new Error(`Publish failed ${data.errcode}: ${data.errmsg}\nFull Response: ${JSON.stringify(data)}`);
   }
 
   return data;
@@ -421,22 +461,24 @@ function renderMarkdownWithPlaceholders(
   color?: string,
   citeStatus: boolean = true,
   title?: string,
+  baseDir?: string,
 ): MarkdownRenderResult {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
   const mdToWechatScript = path.join(__dirname, "md-to-wechat.ts");
-  const baseDir = path.dirname(markdownPath);
+  const scriptBaseDir = path.dirname(markdownPath);
 
   const args = ["-y", "bun", mdToWechatScript, markdownPath];
   if (title) args.push("--title", title);
   if (theme) args.push("--theme", theme);
   if (color) args.push("--color", color);
   if (!citeStatus) args.push("--no-cite");
+  if (baseDir) args.push("--basedir", baseDir);
 
-  console.error(`[wechat-api] Rendering markdown with placeholders via md-to-wechat: ${theme}${color ? `, color: ${color}` : ""}, citeStatus: ${citeStatus}`);
+  console.error(`[wechat-api] Rendering markdown with placeholders via md-to-wechat: ${theme}${color ? `, color: ${color}` : ""}, citeStatus: ${citeStatus}, baseDir: ${baseDir || 'default'}`);
   const result = spawnSync("npx", args, {
     stdio: ["inherit", "pipe", "pipe"],
-    cwd: baseDir,
+    cwd: scriptBaseDir,
   });
 
   if (result.status !== 0) {
@@ -528,6 +570,7 @@ interface CliArgs {
   account?: string;
   citeStatus: boolean;
   dryRun: boolean;
+  baseDir?: string;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -542,6 +585,7 @@ function parseArgs(argv: string[]): CliArgs {
     theme: "default",
     citeStatus: true,
     dryRun: false,
+    baseDir: "",
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -571,6 +615,8 @@ function parseArgs(argv: string[]): CliArgs {
       args.citeStatus = false;
     } else if (arg === "--dry-run") {
       args.dryRun = true;
+    } else if (arg === "--basedir" && argv[i + 1]) {
+      args.baseDir = argv[++i];
     } else if (arg.startsWith("--") && argv[i + 1] && !argv[i + 1]!.startsWith("-")) {
       i++;
     } else if (!arg.startsWith("-")) {
@@ -605,7 +651,10 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const baseDir = path.dirname(filePath);
+  const baseDir = args.baseDir ? path.resolve(args.baseDir) : path.dirname(filePath);
+  if (args.baseDir && !fs.existsSync(baseDir)) {
+    console.warn(`[wechat-api] Warning: Provided basedir not found: ${baseDir}`);
+  }
   let title = args.title || "";
   let author = args.author || "";
   let digest = args.summary || "";
@@ -645,7 +694,7 @@ async function main(): Promise<void> {
     if (!digest) digest = frontmatter.digest || frontmatter.summary || frontmatter.description || "";
 
     console.error(`[wechat-api] Theme: ${args.theme}${args.color ? `, color: ${args.color}` : ""}, citeStatus: ${args.citeStatus}`);
-    const rendered = renderMarkdownWithPlaceholders(filePath, args.theme, args.color, args.citeStatus, args.title);
+    const rendered = renderMarkdownWithPlaceholders(filePath, args.theme, args.color, args.citeStatus, args.title, baseDir);
     htmlPath = rendered.htmlPath;
     contentImages = rendered.contentImages;
     if (!title) title = rendered.title;
@@ -706,8 +755,8 @@ async function main(): Promise<void> {
     frontmatter.featureImage ||
     frontmatter.cover ||
     frontmatter.image;
-  const coverPath = rawCoverPath && !path.isAbsolute(rawCoverPath) && args.cover
-    ? path.resolve(process.cwd(), rawCoverPath)
+  const coverPath = rawCoverPath && !path.isAbsolute(rawCoverPath)
+    ? path.resolve(baseDir, rawCoverPath)
     : rawCoverPath;
   const needNewsCoverFallback = args.articleType === "news" && !coverPath;
 

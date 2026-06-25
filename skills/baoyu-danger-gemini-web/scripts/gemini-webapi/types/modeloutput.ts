@@ -32,4 +32,3 @@ export class ModelOutput {
     return this.candidates[this.chosen]?.rcid ?? '';
   }
 }
-
